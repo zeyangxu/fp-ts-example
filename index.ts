@@ -257,20 +257,35 @@ const MockData = t.type({
 
 type MockData = t.TypeOf<typeof MockData>
 
-option.fold<string, void>(
+services.setStorageData(
+  { a: 11, b: 22 },
   () => {},
   (text) => {
-    localStorage.setItem('test', text)
-    console.log(localStorage)
+    console.log('STORAGE-SET')
   }
-)(stringify(MockData, { a: 1, b: 2, c: 3 }))
+)
 
-option.fold<MockData, void>(
+services.getStorageData(
   () => {},
-  (parsed) => {
-    console.log(parsed)
+  (text) => {
+    console.log('STORAGE', text)
   }
-)(parse(MockData, localStorage.getItem('test')))
+)
+
+// option.fold<string, void>(
+//   () => {},
+//   (text) => {
+//     localStorage.setItem('test', text)
+//     console.log(localStorage)
+//   }
+// )(stringify(MockData, { a: 1, b: 2, c: 3 }))
+
+// option.fold<MockData, void>(
+//   () => {},
+//   (parsed) => {
+//     console.log(parsed)
+//   }
+// )(parse(MockData, localStorage.getItem('test')))
 
 // -----------------------------------------------------------------------------
 // axios IO monad
@@ -282,21 +297,16 @@ const vm = {
   hackerNewsRes: {}
 }
 
-fetchHackerNews({}).then(resEither =>
-  pipe(
-    resEither,
-    either.fold(
-      (err) => {
-        if(isErrors(err)) { // 后端不符合约定的返回
-          console.log(PathReporter.report(resEither as t.Validation<any>))
-        } else { // 请求错误
-          console.log(err)
-        }
-      },
-      (data) => { // 经过类型检查后的合格数据
-        vm.hackerNewsRes = data 
-        console.log(vm)
-      }
-    )
-  )
-)
+// fetchHackerNews({},
+//   (err) => {
+//     if(isErrors(err)) { // 后端不符合约定的返回
+//       console.log(err.map(e => [e.value, e.context.map(ctx => ctx.key)[1]]))
+//     } else { // 请求错误
+//       console.log(err)
+//     }
+//   },
+//   (data) => { // 经过类型检查后的合格数据
+//     vm.hackerNewsRes = data 
+//     console.log(vm)
+//   }
+// )()

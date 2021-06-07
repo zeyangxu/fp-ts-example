@@ -1,6 +1,7 @@
 import { either, taskEither } from 'fp-ts'
 import { pipe } from 'fp-ts/function'
 import axios, {  AxiosResponse } from 'axios'
+import { PathReporter } from 'io-ts/PathReporter'
 import * as t from 'io-ts'
 
 interface RequestConfig {
@@ -53,13 +54,21 @@ export function request<T>(
   option: {
     url: string,
     method: 'post' | 'get',
-    params?: { [key: string]: string },
-  }) {
-  const service = axiosM[option.method]<AxiosResponse>({ url: option.url, params: option.params })
-  return pipe(
-    service,
-    taskEither.chainEitherKW(
-      (res) => type.decode(res.data) as either.Either<t.Errors, T>
+  }
+  ) {
+    return function (params: { [key: string]: string }, onError: (err: Error | t.Errors) => void, onRes: (res: T) => void) {
+    const service = axiosM[option.method]<AxiosResponse>({ url: option.url, params })
+    return pipe(
+      service,
+      taskEither.chainEitherKW(
+        (res) => type.decode(res.data) as either.Either<t.Errors, T>
+      ),
+      taskEither.mapLeft(
+        onError
+      ),
+      taskEither.map(
+        onRes
+      )
     )
-  )()
+  }
 }
