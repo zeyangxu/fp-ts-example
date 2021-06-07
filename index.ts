@@ -1,12 +1,14 @@
+import * as t from 'io-ts'
 import { io, random, semigroup, ord, number, task, date, monad, hkt, option, readonlyArray, either, nonEmptyArray, apply, array, show, string, ioEither, json, taskEither } from 'fp-ts'
 import { log } from 'fp-ts/Console'
 import { pipe, identity, flow } from 'fp-ts/function'
 import { concatAll, Monoid } from 'fp-ts/Monoid'
 import { replicate } from 'fp-ts/ReadonlyArray'
-import * as t from 'io-ts'
 import { PathReporter } from 'io-ts/PathReporter'
-import { request, isErrors } from './lib/request'
-import format from 'pretty-format'
+
+import { stringify, parse } from './lib/json'
+import services, { HackerNewsRes } from './services'
+import { isErrors } from './lib/request'
 
 // ---------------------------------------------------
 // Combinators
@@ -227,86 +229,74 @@ function validatePassword(s: string): either.Either<nonEmptyArray.NonEmptyArray<
   )
 }
 
-either.fold((s) => log(s), () => log('validation pass'))(validatePassword('abababA1'))()
+either.match<nonEmptyArray.NonEmptyArray<string>, string, io.IO<void>>((s) => log(s), () => log('validation pass'))(validatePassword('abababA'))()
 
 // -----------------------------------------------------------------------------
 // localStorage setItem IO monad
 // -----------------------------------------------------------------------------
-interface StorageItem<A> {
-  key: string;
-  value: A;
+interface MockLocalStorage {
+  db: { [key: string]: string };
+  setItem: (key: string, val: string) => void;
+  getItem: (key: string) => string;
 }
 
-const setItem = (key: string, value: string): io.IO<void> => () => localStorage.setItem(key, value)
-
-function setStorageItem(storageItem: StorageItem<any>):io.IO<void> {
-  const valueEither = ioEither.fromEither(json.stringify(storageItem.value))
-  return ioEither.fold<unknown, string, void>(
-    () => () => {},
-    (val) => setItem(storageItem.key, val)
-  )(valueEither)
+const localStorage: MockLocalStorage = {
+  db: {},
+  setItem: function (key, val) {
+    this.db[key] = val
+  },
+  getItem: function (key) {
+    return this.db[key]
+  }
 }
+
+const MockData = t.type({
+  a: t.number,
+  b: t.number
+})
+
+type MockData = t.TypeOf<typeof MockData>
+
+option.fold<string, void>(
+  () => {},
+  (text) => {
+    localStorage.setItem('test', text)
+    console.log(localStorage)
+  }
+)(stringify(MockData, { a: 1, b: 2, c: 3 }))
+
+option.fold<MockData, void>(
+  () => {},
+  (parsed) => {
+    console.log(parsed)
+  }
+)(parse(MockData, localStorage.getItem('test')))
 
 // -----------------------------------------------------------------------------
 // axios IO monad
 // -----------------------------------------------------------------------------
-interface UrlBrand {
-  readonly Url: unique symbol // use `unique symbol` here to ensure uniqueness across modules / packages
-}
 
-const urlPattern = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
-
-const Url = t.brand(
-  t.string, // a codec representing the type to be refined
-  (n): n is t.Branded<string, UrlBrand> => urlPattern.test(n), // a custom type guard using the build-in helper `Branded`
-  'Url' // the name must match the readonly field in the brand
-)
-
-type Url = t.TypeOf<typeof Url>
-
-const HackerNewsRes = t.type({
-  by: t.string,
-  descendants: t.number,
-  id: t.number,
-  kids: t.array(t.number),
-  score: t.number,
-  time: t.number,
-  title: t.string,
-  type: t.string,
-  url: Url,
-})
-
-type HackerNewsRes = t.TypeOf<typeof HackerNewsRes>
-
-const url = 'https://hacker-news.firebaseio.com/v0/item/8863.json?print=pretty'
-
-const url2 = 'https://hacker-news.firebaseio.com/v0/user/jl.json?print=pretty'
-
-const url3 = ''
-
-export const fetchHackerNews = request<HackerNewsRes>(HackerNewsRes, { url: url2, method: 'get' })
+export const fetchHackerNews = services.getHackerNews
 
 const vm = {
   hackerNewsRes: {}
 }
 
-fetchHackerNews.then(
-  (resEither) => {
-    pipe(
-      resEither,
-      either.fold(
-        (err) => {
-          if(isErrors(err)) {
-            console.log(PathReporter.report(resEither as t.Validation<any>))
-          } else {
-            console.log(err)
-          }
-        },
-        (data) => {
-          vm.hackerNewsRes = data 
+fetchHackerNews({}).then(resEither =>
+  pipe(
+    resEither,
+    either.fold(
+      (err) => {
+        if(isErrors(err)) { // 后端不符合约定的返回
+          console.log(PathReporter.report(resEither as t.Validation<any>))
+        } else { // 请求错误
+          console.log(err)
         }
-      )
+      },
+      (data) => { // 经过类型检查后的合格数据
+        vm.hackerNewsRes = data 
+        console.log(vm)
+      }
     )
-    console.log(vm)
-  }
+  )
 )
