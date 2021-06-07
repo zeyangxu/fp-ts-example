@@ -1,8 +1,12 @@
-import { io, random, semigroup, ord, number, task, date, monad, hkt, option, readonlyArray, either, nonEmptyArray, apply, array, show, string, ioEither, json } from 'fp-ts'
+import { io, random, semigroup, ord, number, task, date, monad, hkt, option, readonlyArray, either, nonEmptyArray, apply, array, show, string, ioEither, json, taskEither } from 'fp-ts'
 import { log } from 'fp-ts/Console'
-import { pipe, identity } from 'fp-ts/function'
+import { pipe, identity, flow } from 'fp-ts/function'
 import { concatAll, Monoid } from 'fp-ts/Monoid'
 import { replicate } from 'fp-ts/ReadonlyArray'
+import * as t from 'io-ts'
+import { PathReporter } from 'io-ts/PathReporter'
+import { request, isErrors } from './lib/request'
+import format from 'pretty-format'
 
 // ---------------------------------------------------
 // Combinators
@@ -185,9 +189,9 @@ concatAll(getMonoid(monoidVoid))(persons)()
 // logPerson(person2)()
 // logPerson(person3)()
 
-// --------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Validation
-// --------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 const minLength = (s: string): either.Either<string, string> =>
   s.length >= 6 ? either.right(s) : either.left('at least 6 characters')
@@ -242,3 +246,67 @@ function setStorageItem(storageItem: StorageItem<any>):io.IO<void> {
     (val) => setItem(storageItem.key, val)
   )(valueEither)
 }
+
+// -----------------------------------------------------------------------------
+// axios IO monad
+// -----------------------------------------------------------------------------
+interface UrlBrand {
+  readonly Url: unique symbol // use `unique symbol` here to ensure uniqueness across modules / packages
+}
+
+const urlPattern = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/
+
+const Url = t.brand(
+  t.string, // a codec representing the type to be refined
+  (n): n is t.Branded<string, UrlBrand> => urlPattern.test(n), // a custom type guard using the build-in helper `Branded`
+  'Url' // the name must match the readonly field in the brand
+)
+
+type Url = t.TypeOf<typeof Url>
+
+const HackerNewsRes = t.type({
+  by: t.string,
+  descendants: t.number,
+  id: t.number,
+  kids: t.array(t.number),
+  score: t.number,
+  time: t.number,
+  title: t.string,
+  type: t.string,
+  url: Url,
+})
+
+type HackerNewsRes = t.TypeOf<typeof HackerNewsRes>
+
+const url = 'https://hacker-news.firebaseio.com/v0/item/8863.json?print=pretty'
+
+const url2 = 'https://hacker-news.firebaseio.com/v0/user/jl.json?print=pretty'
+
+const url3 = ''
+
+export const fetchHackerNews = request<HackerNewsRes>(HackerNewsRes, { url: url2, method: 'get' })
+
+const vm = {
+  hackerNewsRes: {}
+}
+
+fetchHackerNews.then(
+  (resEither) => {
+    pipe(
+      resEither,
+      either.fold(
+        (err) => {
+          if(isErrors(err)) {
+            console.log(PathReporter.report(resEither as t.Validation<any>))
+          } else {
+            console.log(err)
+          }
+        },
+        (data) => {
+          vm.hackerNewsRes = data 
+        }
+      )
+    )
+    console.log(vm)
+  }
+)
