@@ -323,10 +323,6 @@ interface ListState {
   selected: string
 }
 
-const s = state.get<ListState>()
-
-const getSelected = state.gets<ListState, string>((s) => s.selected)
-
 // const getter = (field: keyof ListState) =>
 //   state.gets<ListState, string>((s) => s[field])
 
@@ -343,14 +339,29 @@ const changeLoading = state.modify<ListState>((list) => {
   }
 })
 
+const getSelected = state.gets<ListState, string>((s) => s.selected)
+
+const setSelected = (val: string) =>
+  state.modify<ListState>((list) => ({
+    ...list,
+    selected: val,
+  }))
+
 const getLoading = state.gets<ListState, boolean>((s) => s.isLoading)
 
+const s = state.get<ListState>()
+
 const mutation = pipe(
-  s,
-  state.chain(() => changeLoading),
-  state.chain(() => getLoading)
+  state.get<ListState>(),
+  state.chain(() => state.modify((list) => ({ ...list, isLoading: true }))),
+  state.chain(() => getLoading),
+  state.chain((isLoading) =>
+    isLoading ? setSelected('wow') : state.gets<ListState, void>(() => {})
+  ),
+  state.chain(() => state.gets((s) => s.selected))
 )
 
-const res = state.evaluate(init)(mutation)
+// const res = state.execute(init)(mutation)
+const res = state.execute(init)(setSelected('haha'))
 
 console.log(res)
