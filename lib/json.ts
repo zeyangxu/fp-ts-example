@@ -1,11 +1,13 @@
 import { option, either } from 'fp-ts'
 import { pipe } from 'fp-ts/function'
 import * as t from 'io-ts'
+
 interface Serializer {
   stringify: (target: any) => string
   parse: (encoded: string) => any
 }
 
+/** 类型检查后进行JSON序列化 */
 export function stringify<A>(
   type: t.Mixed,
   val: A,
@@ -21,6 +23,7 @@ export function stringify<A>(
   )
 }
 
+/** JSON反序列化之后进行类型检查 */
 export function parse<A>(
   type: t.Mixed,
   val: string | null,
