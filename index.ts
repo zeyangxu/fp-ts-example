@@ -13,6 +13,7 @@ import {
   either,
   nonEmptyArray,
   apply,
+  state,
 } from 'fp-ts'
 import { log } from 'fp-ts/Console'
 import { pipe, identity, flow } from 'fp-ts/function'
@@ -22,6 +23,7 @@ import { replicate } from 'fp-ts/ReadonlyArray'
 import { isErrors } from './lib/request'
 import storage from './services/storage'
 import apis from './services/apis'
+import { listen } from 'fp-ts/lib/Traced'
 
 // ---------------------------------------------------
 // Combinators
@@ -272,20 +274,20 @@ either.match<nonEmptyArray.NonEmptyArray<string>, string, io.IO<void>>(
 // localStorage setItem IO monad
 // -----------------------------------------------------------------------------
 
-storage.setStorageData(
-  { a: 11, b: 22 },
-  () => {},
-  (text) => {
-    console.log('STORAGE-SET')
-  }
-)
+// storage.setStorageData(
+//   { a: 11, b: 22 },
+//   () => {},
+//   (text) => {
+//     console.log('STORAGE-SET')
+//   }
+// )
 
-storage.getStorageData(
-  () => {},
-  (text) => {
-    console.log('STORAGE', text)
-  }
-)
+// storage.getStorageData(
+//   () => {},
+//   (text) => {
+//     console.log('STORAGE', text)
+//   }
+// )
 
 // -----------------------------------------------------------------------------
 // axios IO monad
@@ -297,20 +299,58 @@ const vm = {
   hackerNewsRes: {},
 }
 
-fetchHackerNews(
-  {},
-  (err) => {
-    if (isErrors(err)) {
-      // 后端不符合约定的返回
-      console.log(err.map((e) => [e.value, e.context.map((ctx) => ctx.key)[1]]))
-    } else {
-      // 请求错误
-      console.log(err)
-    }
-  },
-  (data) => {
-    // 经过类型检查后的合格数据
-    vm.hackerNewsRes = data
-    console.log(vm)
+// fetchHackerNews(
+//   {},
+//   (err) => {
+//     if (isErrors(err)) {
+//       // 后端不符合约定的返回
+//       console.log(err.map((e) => [e.value, e.context.map((ctx) => ctx.key)[1]]))
+//     } else {
+//       // 请求错误
+//       console.log(err)
+//     }
+//   },
+//   (data) => {
+//     // 经过类型检查后的合格数据
+//     vm.hackerNewsRes = data
+//     console.log(vm)
+//   }
+// )
+
+interface ListState {
+  isLoading: boolean
+  list: string[]
+  selected: string
+}
+
+const s = state.get<ListState>()
+
+const getSelected = state.gets<ListState, string>((s) => s.selected)
+
+// const getter = (field: keyof ListState) =>
+//   state.gets<ListState, string>((s) => s[field])
+
+const init = {
+  isLoading: true,
+  list: ['apple', 'banana', 'grape'],
+  selected: 'apple',
+}
+
+const changeLoading = state.modify<ListState>((list) => {
+  return {
+    ...list,
+    isLoading: false,
   }
+})
+
+const getLoading = state.gets<ListState, boolean>((s) => s.isLoading)
+
+const mutation = pipe(
+  s,
+  state.chain(() => changeLoading),
+  state.chain(() => getLoading)
 )
+
+const res = state.evaluate(init)(mutation)
+
+console.log(res)

@@ -6,7 +6,7 @@ import { pipe, Lazy } from 'fp-ts/function'
 interface MockLocalStorage {
   db: { [key: string]: string }
   setItem: (key: string, val: string) => void
-  getItem: (key: string) => string
+  getItem: (key: string) => string | null
 }
 
 let mockLocalStorage: MockLocalStorage = {
@@ -23,16 +23,20 @@ let mockLocalStorage: MockLocalStorage = {
 
 let localStorage = mockLocalStorage
 
+/** 拿到 storage 储存之后进行类型检查 */
 export function getStorageItem<T>(
   type: t.Mixed,
   key: string,
   storage = localStorage
 ) {
   return function (onNone: Lazy<void>, onSome: (data: T) => void) {
-    option.fold(onNone, onSome)(parse<T>(type, storage.getItem(key)))
+    const data = storage.getItem(key)
+    if (data === null) return onNone()
+    option.fold(onNone, onSome)(parse<T>(type, data))
   }
 }
 
+/** 类型检查后储存进 storage */
 export function setStorageItem<T>(
   type: t.Mixed,
   key: string,
