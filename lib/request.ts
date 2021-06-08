@@ -72,6 +72,6 @@ export function request<T>(
       ),
       taskEither.mapLeft(onError),
       taskEither.map(onRes)
-    )
+    )()
   }
 }

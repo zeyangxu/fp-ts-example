@@ -313,6 +313,4 @@ fetchHackerNews(
     vm.hackerNewsRes = data
     console.log(vm)
   }
-)()
-
-// testing
+)
