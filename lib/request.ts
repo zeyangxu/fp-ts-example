@@ -1,24 +1,24 @@
 import { either, taskEither } from 'fp-ts'
 import { pipe } from 'fp-ts/function'
-import axios, {  AxiosResponse } from 'axios'
+import axios, { AxiosResponse } from 'axios'
 import { PathReporter } from 'io-ts/PathReporter'
 import * as t from 'io-ts'
 
 interface RequestConfig {
-  url: string;
+  url: string
   params?: {
     [key: string]: string
   }
 }
 
-function _axiosGet<A> (config: RequestConfig) {
+function _axiosGet<A>(config: RequestConfig) {
   return taskEither.tryCatch<Error, A>(
     () => axios.get(config.url, config.params),
     (reason) => new Error(String(reason))
   )
 }
 
-function _axiosPost<A> (config: RequestConfig) {
+function _axiosPost<A>(config: RequestConfig) {
   return taskEither.tryCatch<Error, A>(
     () => axios.post(config.url, config.params),
     (reason) => new Error(String(reason))
@@ -30,16 +30,16 @@ export const Response = (dataType: t.Mixed) => {
     code: t.number,
     msg: t.string,
     extra: t.record(t.null, t.null),
-    data: dataType
+    data: dataType,
   })
 }
 
 export const axiosM = {
   get: _axiosGet,
-  post: _axiosPost
+  post: _axiosPost,
 }
 
-export function isErrors (err: Error | t.Errors): err is t.Errors {
+export function isErrors(err: Error | t.Errors): err is t.Errors {
   if ((err as t.Errors).length) {
     return (err as t.Errors).every((e: t.ValidationError) => {
       return e.context !== undefined
@@ -52,23 +52,26 @@ export function isErrors (err: Error | t.Errors): err is t.Errors {
 export function request<T>(
   type: t.Mixed,
   option: {
-    url: string,
-    method: 'post' | 'get',
+    url: string
+    method: 'post' | 'get'
   }
+) {
+  return function (
+    params: { [key: string]: string },
+    onError: (err: Error | t.Errors) => void,
+    onRes: (res: T) => void
   ) {
-    return function (params: { [key: string]: string }, onError: (err: Error | t.Errors) => void, onRes: (res: T) => void) {
-    const service = axiosM[option.method]<AxiosResponse>({ url: option.url, params })
+    const service = axiosM[option.method]<AxiosResponse>({
+      url: option.url,
+      params,
+    })
     return pipe(
       service,
       taskEither.chainEitherKW(
         (res) => type.decode(res.data) as either.Either<t.Errors, T>
       ),
-      taskEither.mapLeft(
-        onError
-      ),
-      taskEither.map(
-        onRes
-      )
+      taskEither.mapLeft(onError),
+      taskEither.map(onRes)
     )
   }
 }

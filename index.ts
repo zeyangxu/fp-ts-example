@@ -1,14 +1,27 @@
 import * as t from 'io-ts'
-import { io, random, semigroup, ord, number, task, date, monad, hkt, option, readonlyArray, either, nonEmptyArray, apply, array, show, string, ioEither, json, taskEither } from 'fp-ts'
+import {
+  io,
+  random,
+  semigroup,
+  ord,
+  number,
+  task,
+  date,
+  monad,
+  hkt,
+  option,
+  either,
+  nonEmptyArray,
+  apply,
+} from 'fp-ts'
 import { log } from 'fp-ts/Console'
 import { pipe, identity, flow } from 'fp-ts/function'
 import { concatAll, Monoid } from 'fp-ts/Monoid'
 import { replicate } from 'fp-ts/ReadonlyArray'
-import { PathReporter } from 'io-ts/PathReporter'
 
-import { stringify, parse } from './lib/json'
-import services, { HackerNewsRes } from './services'
 import { isErrors } from './lib/request'
+import storage from './services/storage'
+import apis from './services/apis'
 
 // ---------------------------------------------------
 // Combinators
@@ -17,14 +30,14 @@ import { isErrors } from './lib/request'
 export function getMonoid<A>(M: Monoid<A>): Monoid<io.IO<A>> {
   return {
     concat: (x, y) => () => M.concat(x(), y()),
-    empty: () => M.empty
+    empty: () => M.empty,
   }
 }
 
 /** a primitive `Monoid` instance for `void` */
 export const monoidVoid: Monoid<void> = {
   concat: () => undefined,
-  empty: undefined
+  empty: undefined,
 }
 
 export function replicateIO(n: number, mv: io.IO<void>): io.IO<void> {
@@ -56,7 +69,9 @@ export function time<A>(ma: io.IO<A>): io.IO<A> {
 }
 
 export function timeX<A>(ma: io.IO<A>): io.IO<[A, number]> {
-  return io.Monad.chain(date.now, start => io.Monad.chain(ma, a => io.Monad.map(date.now, end => [a, end - start])))
+  return io.Monad.chain(date.now, (start) =>
+    io.Monad.chain(ma, (a) => io.Monad.map(date.now, (end) => [a, end - start]))
+  )
 }
 
 // time(replicateIO(3, printFib))()
@@ -68,7 +83,9 @@ export function ignoreSnd<A>(ma: io.IO<[A, unknown]>): io.IO<A> {
 
 export function fastest<A>(head: io.IO<A>, tail: Array<io.IO<A>>): io.IO<A> {
   // ord.Ord<number> -> ord.Ord<[A, number]> -> semigroup.Semigroup<[A, number]> -> semigroup.Semigroup<io.IO<[A, number]>>
-  const ordTuple = ord.contramap(([, elapsed]: [A, number]) => elapsed)(number.Ord)
+  const ordTuple = ord.contramap(([, elapsed]: [A, number]) => elapsed)(
+    number.Ord
+  )
   const semigroupTuple = semigroup.min(ordTuple)
   const semigroupIO = io.getSemigroup(semigroupTuple)
   const fastest = semigroup.concatAll(semigroupIO)(timeX(head))(tail.map(timeX))
@@ -81,7 +98,9 @@ export function fastest<A>(head: io.IO<A>, tail: Array<io.IO<A>>): io.IO<A> {
 
 export function time2<A>(ma: task.Task<A>): task.Task<[A, number]> {
   const now = task.fromIO(date.now)
-  return task.Monad.chain(now, start => task.Monad.chain(ma, a => task.Monad.map(now, end => [a, end - start])))
+  return task.Monad.chain(now, (start) =>
+    task.Monad.chain(ma, (a) => task.Monad.map(now, (end) => [a, end - start]))
+  )
 }
 
 export interface MonadIO<M extends hkt.URIS> extends monad.Monad1<M> {
@@ -92,20 +111,23 @@ export function time3<M extends hkt.URIS>(
   M: MonadIO<M>
 ): <A>(ma: hkt.Kind<M, A>) => hkt.Kind<M, [A, number]> {
   const now = M.fromIO(date.now) // lifting
-  return ma => M.chain(now, start => M.chain(ma, a => M.map(now, end => [a, end - start])))
+  return (ma) =>
+    M.chain(now, (start) =>
+      M.chain(ma, (a) => M.map(now, (end) => [a, end - start]))
+    )
 }
 
 /** program */
 
 export const monadIOIO: MonadIO<io.URI> = {
   ...io.Monad,
-  fromIO: identity
+  fromIO: identity,
 }
 
 // 可替换 monadIOIO
 export const monadIOTask: MonadIO<task.URI> = {
   ...task.Monad,
-  fromIO: task.fromIO
+  fromIO: task.fromIO,
 }
 
 export function withLogging<A>(ma: io.IO<A>): io.IO<A> {
@@ -116,10 +138,12 @@ export function withLogging<A>(ma: io.IO<A>): io.IO<A> {
 
 const program = withLogging(io.Monad.map(random.randomInt(30, 35), fib))
 
-io.Monad.chain(fastest(program, [program, program]), a => log(`Fastest result is: ${a}`))()
+io.Monad.chain(fastest(program, [program, program]), (a) =>
+  log(`Fastest result is: ${a}`)
+)()
 
 // -----------------------------------------------------
-// smart constructor 
+// smart constructor
 // -----------------------------------------------------
 export interface NonEmptyStringBrand {
   readonly NonEmptyString: unique symbol // ensures uniqueness across modules / packages
@@ -173,15 +197,21 @@ const badAge = makeInt(-1.2)
 function logPerson(ma: option.Option<Person>): io.IO<void> {
   return option.fold<Person, io.IO<void>>(
     () => log('invalid name'),
-    (person) => log(person.name) 
+    (person) => log(person.name)
   )(ma)
 }
 
-const person1 = option.Monad.chain(goodName, name => option.Functor.map(goodAge, age => person(name, age)))
+const person1 = option.Monad.chain(goodName, (name) =>
+  option.Functor.map(goodAge, (age) => person(name, age))
+)
 
-const person2 = option.Monad.chain(badName, name => option.Functor.map(goodAge, age => person(name, age))) // none
+const person2 = option.Monad.chain(badName, (name) =>
+  option.Functor.map(goodAge, (age) => person(name, age))
+) // none
 
-const person3 = option.Monad.chain(goodName, name => option.Functor.map(badAge, age => person(name, age))) // none
+const person3 = option.Monad.chain(goodName, (name) =>
+  option.Functor.map(badAge, (age) => person(name, age))
+) // none
 
 const persons = [person1, person2, person3].map(logPerson)
 
@@ -199,16 +229,20 @@ const minLength = (s: string): either.Either<string, string> =>
   s.length >= 6 ? either.right(s) : either.left('at least 6 characters')
 
 const oneCapital = (s: string): either.Either<string, string> =>
-  /[A-Z]/g.test(s) ? either.right(s) : either.left('at least one capital letter')
+  /[A-Z]/g.test(s)
+    ? either.right(s)
+    : either.left('at least one capital letter')
 
 const oneNumber = (s: string): either.Either<string, string> =>
   /[0-9]/g.test(s) ? either.right(s) : either.left('at least one number')
 
-function lift<E, A>(check: (a: A) => either.Either<E, A>): (a: A) => either.Either<nonEmptyArray.NonEmptyArray<E>, A> {
-  return a =>
+function lift<E, A>(
+  check: (a: A) => either.Either<E, A>
+): (a: A) => either.Either<nonEmptyArray.NonEmptyArray<E>, A> {
+  return (a) =>
     pipe(
       check(a),
-      either.mapLeft(a => [a])
+      either.mapLeft((a) => [a])
     )
 }
 
@@ -216,48 +250,29 @@ const minLengthV = lift(minLength)
 const oneCapitalV = lift(oneCapital)
 const oneNumberV = lift(oneNumber)
 
-const validation = either.getApplicativeValidation(nonEmptyArray.getSemigroup<string>())
+const validation = either.getApplicativeValidation(
+  nonEmptyArray.getSemigroup<string>()
+)
 
-function validatePassword(s: string): either.Either<nonEmptyArray.NonEmptyArray<string>, string> {
+function validatePassword(
+  s: string
+): either.Either<nonEmptyArray.NonEmptyArray<string>, string> {
   return pipe(
-    apply.sequenceT(validation)(
-      minLengthV(s),
-      oneCapitalV(s),
-      oneNumberV(s)
-    ),
+    apply.sequenceT(validation)(minLengthV(s), oneCapitalV(s), oneNumberV(s)),
     either.map(() => s)
   )
 }
 
-either.match<nonEmptyArray.NonEmptyArray<string>, string, io.IO<void>>((s) => log(s), () => log('validation pass'))(validatePassword('abababA'))()
+either.match<nonEmptyArray.NonEmptyArray<string>, string, io.IO<void>>(
+  (s) => log(s),
+  () => log('validation pass')
+)(validatePassword('abababA'))()
 
 // -----------------------------------------------------------------------------
 // localStorage setItem IO monad
 // -----------------------------------------------------------------------------
-interface MockLocalStorage {
-  db: { [key: string]: string };
-  setItem: (key: string, val: string) => void;
-  getItem: (key: string) => string;
-}
 
-const localStorage: MockLocalStorage = {
-  db: {},
-  setItem: function (key, val) {
-    this.db[key] = val
-  },
-  getItem: function (key) {
-    return this.db[key]
-  }
-}
-
-const MockData = t.type({
-  a: t.number,
-  b: t.number
-})
-
-type MockData = t.TypeOf<typeof MockData>
-
-services.setStorageData(
+storage.setStorageData(
   { a: 11, b: 22 },
   () => {},
   (text) => {
@@ -265,48 +280,37 @@ services.setStorageData(
   }
 )
 
-services.getStorageData(
+storage.getStorageData(
   () => {},
   (text) => {
     console.log('STORAGE', text)
   }
 )
 
-// option.fold<string, void>(
-//   () => {},
-//   (text) => {
-//     localStorage.setItem('test', text)
-//     console.log(localStorage)
-//   }
-// )(stringify(MockData, { a: 1, b: 2, c: 3 }))
-
-// option.fold<MockData, void>(
-//   () => {},
-//   (parsed) => {
-//     console.log(parsed)
-//   }
-// )(parse(MockData, localStorage.getItem('test')))
-
 // -----------------------------------------------------------------------------
 // axios IO monad
 // -----------------------------------------------------------------------------
 
-export const fetchHackerNews = services.getHackerNews
+export const fetchHackerNews = apis.getHackerNews
 
 const vm = {
-  hackerNewsRes: {}
+  hackerNewsRes: {},
 }
 
-// fetchHackerNews({},
-//   (err) => {
-//     if(isErrors(err)) { // 后端不符合约定的返回
-//       console.log(err.map(e => [e.value, e.context.map(ctx => ctx.key)[1]]))
-//     } else { // 请求错误
-//       console.log(err)
-//     }
-//   },
-//   (data) => { // 经过类型检查后的合格数据
-//     vm.hackerNewsRes = data 
-//     console.log(vm)
-//   }
-// )()
+fetchHackerNews(
+  {},
+  (err) => {
+    if (isErrors(err)) {
+      // 后端不符合约定的返回
+      console.log(err.map((e) => [e.value, e.context.map((ctx) => ctx.key)[1]]))
+    } else {
+      // 请求错误
+      console.log(err)
+    }
+  },
+  (data) => {
+    // 经过类型检查后的合格数据
+    vm.hackerNewsRes = data
+    console.log(vm)
+  }
+)()
