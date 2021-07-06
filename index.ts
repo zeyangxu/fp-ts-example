@@ -24,9 +24,10 @@ import { isErrors } from './lib/request'
 import storage from './services/storage'
 import apis from './services/apis'
 import { listen } from 'fp-ts/lib/Traced'
+import { Kind, URIS } from 'fp-ts/HKT'
 
 // ---------------------------------------------------
-// Combinators
+// Combinator
 // ---------------------------------------------------
 
 export function getMonoid<A>(M: Monoid<A>): Monoid<io.IO<A>> {
@@ -317,7 +318,7 @@ const vm = {
 //   }
 // )
 
-interface ListState {
+export interface ListState {
   isLoading: boolean
   list: string[]
   selected: string
@@ -332,36 +333,56 @@ const init = {
   selected: 'apple',
 }
 
-const changeLoading = state.modify<ListState>((list) => {
-  return {
-    ...list,
-    isLoading: false,
-  }
-})
-
-const getSelected = state.gets<ListState, string>((s) => s.selected)
-
 const setSelected = (val: string) =>
   state.modify<ListState>((list) => ({
     ...list,
     selected: val,
   }))
 
-const getLoading = state.gets<ListState, boolean>((s) => s.isLoading)
-
-const s = state.get<ListState>()
-
-const mutation = pipe(
-  state.get<ListState>(),
-  state.chain(() => state.modify((list) => ({ ...list, isLoading: true }))),
-  state.chain(() => getLoading),
+export const mutation = pipe(
+  state.modify<ListState>((list) => ({ ...list, isLoading: true })),
+  state.chain(() => state.gets((s) => s.isLoading)),
   state.chain((isLoading) =>
-    isLoading ? setSelected('wow') : state.gets<ListState, void>(() => {})
+    isLoading
+      ? state.modify((list) => ({
+          ...list,
+          selected: 'wow',
+        }))
+      : state.of(null)
   ),
   state.chain(() => state.gets((s) => s.selected))
 )
 
 // const res = state.execute(init)(mutation)
-const res = state.execute(init)(setSelected('haha'))
+// const res = state.execute(init)(setSelected('haha'))
 
-console.log(res)
+// console.log(mutation(init))
+// console.log(res)
+
+function logName(print: <A>(a: A) => io.IO<void>): io.IO<void> {
+  return print('zeb')
+}
+
+function logNameF<M extends URIS>(
+  print: <A>(a: A) => Kind<M, void>
+): Kind<M, void> {
+  return print('zeb')
+}
+
+let mockConsole: any[] = []
+
+function testLog<A>(text: A): io.IO<void> {
+  return () => mockConsole.push(text)
+}
+
+function testLogT<A>(text: A): task.Task<void> {
+  return task.fromIO<void>(() => mockConsole.push(text))
+}
+
+logName(log)()
+logName(testLog)()
+logName(testLogT)()
+logNameF<io.URI>(log)()
+logNameF<task.URI>(testLogT)()
+
+console.log(mockConsole)
