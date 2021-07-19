@@ -1,5 +1,8 @@
 import * as t from 'io-ts'
-import { Fetch, Validate, Transform, validateResponse } from './util'
+import { Fetch, Validate, Transform } from './util'
+import { taskEither, either, task } from 'fp-ts'
+import { error } from 'fp-ts/Console'
+import { pipe } from 'fp-ts/function'
 
 type Metrics = Record<string, string>
 
@@ -12,12 +15,12 @@ interface ItemStat {
   customAudienceId: string
   customAudienceName: string
   metrics: Metrics
-  statTimeDay: string
+  statTimeDay?: string
 }
 
-type TotalStat = Metrics
+export type TotalStat = Metrics
 
-interface Pagination {
+export interface Pagination {
   page: number
   limit: number
   totalCount: number
@@ -48,23 +51,34 @@ interface CommonFilters {
   deliveryType?: string
 }
 
-interface GlobalFilters extends CommonFilters {
+export interface GlobalFilters extends CommonFilters {
   dmpIds: string[]
   adIds: string[]
   customAudienceType: CustomAudienceType
 }
 
-interface Stats {
+export interface Stats {
   stats: ItemStat[]
   statistics: TotalStat
   pagination: Pagination
 }
 
-const DmpReportResponse = t.type({
+export const DmpReportResponseT = t.type({
   code: t.number,
   msg: t.string,
   data: t.type({
-    stats: t.record(t.string, t.string),
+    stats: t.array(
+      t.type({
+        custom_audience_coverNum: t.string,
+        custom_audience_cover_num_by_app_aweme: t.string,
+        custom_audience_cover_num_by_app_hotsoon: t.string,
+        custom_audience_cover_num_by_app_toutiao: t.string,
+        custom_audience_cover_num_by_app_xigua: t.string,
+        custom_audience_id: t.string,
+        custom_audience_name: t.string,
+        metrics: t.record(t.string, t.string),
+      })
+    ),
     statistics: t.record(t.string, t.string),
     pagination: t.type({
       page: t.number,
@@ -75,19 +89,31 @@ const DmpReportResponse = t.type({
   }),
 })
 
-type DmpReportResponse = t.TypeOf<typeof DmpReportResponse>
+export type DmpReportResponse = t.TypeOf<typeof DmpReportResponseT>
 
 /** [mutable] update the repo with requested data */
-export function getData(
-  repo: Stats,
-  fetch: Fetch<DmpReportResponse, GlobalFilters>,
-  filters: GlobalFilters,
-  validate: Validate<DmpReportResponse>,
-  transform: Transform<DmpReportResponse, Stats>
+export function getDataAndSetRepo(
+  /** each param can be seen as a port */
+  setRepo: (s: Stats) => void, // state / store / hooks / mock...
+  fetch: Fetch<DmpReportResponse>, // axios / ajax
+  filters: GlobalFilters, // can be global or local state
+  fields: string[], // can be configurable or fixed
+  validate: Validate<DmpReportResponse>, // io-ts / joi
+  transform: Transform<DmpReportResponse, Stats> // can be different implementation
 ) {
-  validateResponse(fetch, filters, validate, transform)().then((res) => {
+  pipe(
+    fetch('api', { ...filters, fields }),
+    taskEither.chainEitherKW(validate),
+    taskEither.map(transform),
+    taskEither.foldW(
+      // error is handled here
+      (e) => task.fromIO(error('Validation Error')),
+      (res) => task.of(res)
+    )
+  )().then((res) => {
+    // destruct the result after validation
     if (res) {
-      repo = res
+      setRepo(res)
     }
   })
 }
