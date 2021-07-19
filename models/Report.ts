@@ -1,8 +1,12 @@
 import * as t from 'io-ts'
-import { Fetch, Validate, Transform } from './util'
+import { Fetch, Validate, Transform } from './common'
 import { taskEither, either, task } from 'fp-ts'
 import { error } from 'fp-ts/Console'
 import { pipe } from 'fp-ts/function'
+
+// -----------------------------------------------------------------------------
+// Type Definition
+// -----------------------------------------------------------------------------
 
 type Metrics = Record<string, string>
 
@@ -63,43 +67,22 @@ export interface Stats {
   pagination: Pagination
 }
 
-export const DmpReportResponseT = t.type({
-  code: t.number,
-  msg: t.string,
-  data: t.type({
-    stats: t.array(
-      t.type({
-        custom_audience_coverNum: t.string,
-        custom_audience_cover_num_by_app_aweme: t.string,
-        custom_audience_cover_num_by_app_hotsoon: t.string,
-        custom_audience_cover_num_by_app_toutiao: t.string,
-        custom_audience_cover_num_by_app_xigua: t.string,
-        custom_audience_id: t.string,
-        custom_audience_name: t.string,
-        metrics: t.record(t.string, t.string),
-      })
-    ),
-    statistics: t.record(t.string, t.string),
-    pagination: t.type({
-      page: t.number,
-      limit: t.number,
-      total_count: t.number,
-      total_page: t.number,
-    }),
-  }),
-})
+/** 选中的指标 */
+type SelectedFields = string[]
 
-export type DmpReportResponse = t.TypeOf<typeof DmpReportResponseT>
+// -----------------------------------------------------------------------------
+// Business Logic
+// -----------------------------------------------------------------------------
 
 /** [mutable] update the repo with requested data */
-export function getDataAndSetRepo(
+export function getDataAndSetRepo<T>(
   /** each param can be seen as a port */
   setRepo: (s: Stats) => void, // state / store / hooks / mock...
-  fetch: Fetch<DmpReportResponse>, // axios / ajax
+  fetch: Fetch<T>, // axios / ajax
   filters: GlobalFilters, // can be global or local state
   fields: string[], // can be configurable or fixed
-  validate: Validate<DmpReportResponse>, // io-ts / joi
-  transform: Transform<DmpReportResponse, Stats> // can be different implementation
+  validate: Validate<T>, // io-ts / joi
+  transform: Transform<T, Stats> // can be different implementation
 ) {
   pipe(
     fetch('api', { ...filters, fields }),

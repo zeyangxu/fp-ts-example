@@ -8,7 +8,3 @@ export type Fetch<Response> = (
 export type Validate<Response> = (res: Response) => either.Either<any, Response>
 
 export type Transform<Response, Data> = (res: Response) => Data
-
-export interface Repository<T> {
-  storage: T
-}

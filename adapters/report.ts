@@ -1,17 +1,48 @@
 import {
   getDataAndSetRepo,
-  DmpReportResponse,
   Stats,
   TotalStat,
   Pagination,
   GlobalFilters,
-  DmpReportResponseT,
 } from '../models/report'
 import axios from 'axios'
 import * as t from 'io-ts'
 import { either, taskEither } from 'fp-ts'
 import { pipe } from 'fp-ts/function'
 import { useState } from 'react'
+
+// -----------------------------------------------------------------------------
+// Service
+// -----------------------------------------------------------------------------
+
+export const DmpReportResponseT = t.type({
+  code: t.number,
+  msg: t.string,
+  extra: t.union([t.UnknownRecord, t.undefined]),
+  data: t.type({
+    stats: t.array(
+      t.type({
+        custom_audience_coverNum: t.string,
+        custom_audience_cover_num_by_app_aweme: t.string,
+        custom_audience_cover_num_by_app_hotsoon: t.string,
+        custom_audience_cover_num_by_app_toutiao: t.string,
+        custom_audience_cover_num_by_app_xigua: t.string,
+        custom_audience_id: t.string,
+        custom_audience_name: t.string,
+        metrics: t.record(t.string, t.string),
+      })
+    ),
+    statistics: t.record(t.string, t.string),
+    pagination: t.type({
+      page: t.number,
+      limit: t.number,
+      total_count: t.number,
+      total_page: t.number,
+    }),
+  }),
+})
+
+export type DmpReportResponse = t.TypeOf<typeof DmpReportResponseT>
 
 function fetch(url: string, filters: GlobalFilters) {
   return taskEither.tryCatch<Error, DmpReportResponse>(
@@ -35,17 +66,21 @@ function transform(a: DmpReportResponse) {
   return {} as Stats
 }
 
-export function getDataAndSetState() {
-  const [repo, setRepo] = useState({} as Stats)
-  const [filters, setFilters] = useState({
-    dmpIds: [],
-    adIds: [],
-    customAudienceType: 1,
-    dateRange: {
-      st: '2021-10-10',
-      et: '2021-10-12',
-      isCompare: false,
-    },
-  })
-  getDataAndSetRepo(setRepo, fetch, filters, [], validate, transform)
-}
+// -----------------------------------------------------------------------------
+// Storage
+// -----------------------------------------------------------------------------
+
+const [repo, setRepo] = useState({} as Stats)
+
+const [filters, setFilters] = useState({
+  dmpIds: [],
+  adIds: [],
+  customAudienceType: 1,
+  dateRange: {
+    st: '2021-10-10',
+    et: '2021-10-12',
+    isCompare: false,
+  },
+})
+
+getDataAndSetRepo(setRepo, fetch, filters, [], validate, transform)
