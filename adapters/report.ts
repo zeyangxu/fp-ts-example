@@ -1,10 +1,4 @@
-import {
-  getDataAndSetRepo,
-  Stats,
-  TotalStat,
-  Pagination,
-  GlobalFilters,
-} from '../models/report'
+import * as ReportModel from '../models/report'
 import axios from 'axios'
 import * as t from 'io-ts'
 import { either, taskEither } from 'fp-ts'
@@ -44,33 +38,30 @@ export const DmpReportResponseT = t.type({
 
 export type DmpReportResponse = t.TypeOf<typeof DmpReportResponseT>
 
-function fetch(url: string, filters: GlobalFilters) {
+function fetch(filters: ReportModel.GlobalFilters, fields: string[]) {
   return taskEither.tryCatch<Error, DmpReportResponse>(
     () =>
-      axios.get(url, {
+      axios.get('url', {
         method: 'post',
-        params: filters,
+        params: { ...filters, fields },
       }),
     (reason) => new Error(String(reason))
   )
 }
 
 function validate(res: DmpReportResponse) {
-  return DmpReportResponseT.decode(res) as either.Either<
-    Error | t.Errors,
-    DmpReportResponse
-  >
+  return DmpReportResponseT.decode(res)
 }
 
 function transform(a: DmpReportResponse) {
-  return {} as Stats
+  return {} as ReportModel.Stats
 }
 
 // -----------------------------------------------------------------------------
 // Storage
 // -----------------------------------------------------------------------------
 
-const [repo, setRepo] = useState({} as Stats)
+const [repo, setRepo] = useState({} as ReportModel.Stats)
 
 const [filters, setFilters] = useState({
   dmpIds: [],
@@ -83,4 +74,8 @@ const [filters, setFilters] = useState({
   },
 })
 
-getDataAndSetRepo(setRepo, fetch, filters, [], validate, transform)
+ReportModel.getData(fetch)(validate)(transform)(filters)([])().then((res) => {
+  if (res) {
+    setRepo(res)
+  }
+})

@@ -1,5 +1,5 @@
 import * as t from 'io-ts'
-import { Fetch, Validate, Transform } from './common'
+import { Validate, Transform } from './common'
 import { taskEither, either, task } from 'fp-ts'
 import { error } from 'fp-ts/Console'
 import { pipe } from 'fp-ts/function'
@@ -10,7 +10,7 @@ import { pipe } from 'fp-ts/function'
 
 type Metrics = Record<string, string>
 
-interface ItemStat {
+interface ItemStatAttributes {
   customAudienceCoverNum: string
   customAudienceCoverNumByAppAweme: string
   customAudienceCoverNumByAppHotsoon: string
@@ -18,8 +18,11 @@ interface ItemStat {
   customAudienceCoverNumByAppXigua: string
   customAudienceId: string
   customAudienceName: string
-  metrics: Metrics
   statTimeDay?: string
+}
+
+interface ItemStat extends ItemStatAttributes {
+  metrics: Metrics
 }
 
 export type TotalStat = Metrics
@@ -67,36 +70,33 @@ export interface Stats {
   pagination: Pagination
 }
 
-/** 选中的指标 */
-type SelectedFields = string[]
+export type Fetch<Response> = (
+  filters: GlobalFilters,
+  fields: string[]
+) => taskEither.TaskEither<any, Response>
+
+interface TableState {
+  data: ItemStatAttributes & Metrics
+}
 
 // -----------------------------------------------------------------------------
 // Business Logic
 // -----------------------------------------------------------------------------
 
-/** [mutable] update the repo with requested data */
-export function getDataAndSetRepo<T>(
-  /** each param can be seen as a port */
-  setRepo: (s: Stats) => void, // state / store / hooks / mock...
-  fetch: Fetch<T>, // axios / ajax
-  filters: GlobalFilters, // can be global or local state
-  fields: string[], // can be configurable or fixed
-  validate: Validate<T>, // io-ts / joi
-  transform: Transform<T, Stats> // can be different implementation
-) {
-  pipe(
-    fetch('api', { ...filters, fields }),
-    taskEither.chainEitherKW(validate),
-    taskEither.map(transform),
-    taskEither.foldW(
-      // error is handled here
-      (e) => task.fromIO(error('Validation Error')),
-      (res) => task.of(res)
+export const getData =
+  <T>(fetch: Fetch<T>) =>
+  (validate: Validate<T>) =>
+  (transform: Transform<T, Stats>) =>
+  (filters: GlobalFilters) =>
+  (fields: string[]) => {
+    return pipe(
+      fetch(filters, fields),
+      taskEither.chainEitherKW(validate),
+      taskEither.map(transform),
+      taskEither.foldW(
+        // error is handled here
+        (e) => task.fromIO(error('Validation Error')),
+        (res) => task.of(res)
+      )
     )
-  )().then((res) => {
-    // destruct the result after validation
-    if (res) {
-      setRepo(res)
-    }
-  })
-}
+  }
