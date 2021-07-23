@@ -5,7 +5,7 @@ import { error } from 'fp-ts/Console'
 import { pipe } from 'fp-ts/function'
 
 // -----------------------------------------------------------------------------
-// Type Definition
+// Entities
 // -----------------------------------------------------------------------------
 
 type Metrics = Record<string, string>
@@ -70,27 +70,38 @@ export interface Stats {
   pagination: Pagination
 }
 
-export type Fetch<Response> = (
-  filters: GlobalFilters,
-  fields: string[]
-) => taskEither.TaskEither<any, Response>
+export type Fetch<Response> = (params: {
+  filters?: GlobalFilters
+  fields?: string[]
+  sortStat?: keyof Metrics
+}) => taskEither.TaskEither<any, Response>
 
 interface TableState {
   data: ItemStatAttributes & Metrics
 }
 
 // -----------------------------------------------------------------------------
-// Business Logic
+// Use Cases
 // -----------------------------------------------------------------------------
 
+/**
+ * 获取报表数据
+ * @param fetch 报表数据获取的实现
+ * @param validate 运行时类型检查
+ * @param transform 将api返回数据转化成 model类型
+ * @param params
+ */
 export const getData =
   <T>(fetch: Fetch<T>) =>
   (validate: Validate<T>) =>
   (transform: Transform<T, Stats>) =>
-  (filters: GlobalFilters) =>
-  (fields: string[]) => {
+  (params: {
+    filters?: GlobalFilters
+    fields?: string[]
+    sortStat?: keyof Metrics
+  }) => {
     return pipe(
-      fetch(filters, fields),
+      fetch(params),
       taskEither.chainEitherKW(validate),
       taskEither.map(transform),
       taskEither.foldW(
@@ -98,5 +109,5 @@ export const getData =
         (e) => task.fromIO(error('Validation Error')),
         (res) => task.of(res)
       )
-    )
+    )()
   }

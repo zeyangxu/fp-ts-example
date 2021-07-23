@@ -38,12 +38,17 @@ export const DmpReportResponseT = t.type({
 
 export type DmpReportResponse = t.TypeOf<typeof DmpReportResponseT>
 
-function fetch(filters: ReportModel.GlobalFilters, fields: string[]) {
+function fetch(params: {
+  filters?: ReportModel.GlobalFilters
+  fields?: string[]
+  sortStat?: string
+}) {
+  const { filters = {}, fields = [], sortStat = 'stat_cost' } = params
   return taskEither.tryCatch<Error, DmpReportResponse>(
     () =>
       axios.get('url', {
         method: 'post',
-        params: { ...filters, fields },
+        params: { ...filters, fields, sort_stat: sortStat },
       }),
     (reason) => new Error(String(reason))
   )
@@ -74,7 +79,11 @@ const [filters, setFilters] = useState({
   },
 })
 
-ReportModel.getData(fetch)(validate)(transform)(filters)([])().then((res) => {
+ReportModel.getData(fetch)(validate)(transform)({
+  filters,
+  fields: [],
+  sortStat: 'stat_cost',
+}).then((res) => {
   if (res) {
     setRepo(res)
   }
